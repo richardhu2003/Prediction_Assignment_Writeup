@@ -13,7 +13,7 @@ library(rpart.plot)
 library(RColorBrewer)
 library(rattle)
 library(randomForest)
-set.seed(28)
+set.seed(2017)
 knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 ```
 
