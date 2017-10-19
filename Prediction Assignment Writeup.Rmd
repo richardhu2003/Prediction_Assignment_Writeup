@@ -1,0 +1,161 @@
+---
+title: "Practical Machine Learning - Course Projectd"
+author: "Jian Hu"
+date: "October 19, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+setwd("C:/Users/Fiona's Family/Desktop/Coursera/Practical Machine Learning")
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+set.seed(28)
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+```
+
+
+## Practical Machine Learning - Prediction Assignment Writeup
+
+### Goal
+
+"The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases."
+
+#### Load the Data and Take Care of NA's
+
+```{r}
+train <- read.csv("C:/Users/Fiona's Family/Desktop/Coursera/Practical Machine Learning/pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+test <- read.csv("C:/Users/Fiona's Family/Desktop/Coursera/Practical Machine Learning/pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
+```
+
+##### Partition the data and set up the testing and training sets
+
+```{r}
+part <- createDataPartition(y=train$classe, p=0.6, list=FALSE)
+mytraining <- train[part, ]
+mytesting <- train[-part, ]
+dim(mytraining)
+dim(mytesting)
+
+```
+
+Remove near zero variance data sets from the training set and set up the variables to be used for this analysis. 
+
+```{r}
+mydataNearZero <- nearZeroVar(mytraining, saveMetrics=TRUE)
+myNearZerovariables <- names(mytraining) %in% c("new_window", "kurtosis_roll_belt", "kurtosis_picth_belt", "kurtosis_yaw_belt", "skewness_roll_belt", "skewness_roll_belt.1", "skewness_yaw_belt", "max_yaw_belt", "min_yaw_belt", "amplitude_yaw_belt", "avg_roll_arm", "stddev_roll_arm", "var_roll_arm", "avg_pitch_arm", "stddev_pitch_arm", "var_pitch_arm", "avg_yaw_arm",
+"stddev_yaw_arm", "var_yaw_arm", "kurtosis_roll_arm", "kurtosis_picth_arm",
+"kurtosis_yaw_arm", "skewness_roll_arm", "skewness_pitch_arm", "skewness_yaw_arm", "max_roll_arm", "min_roll_arm", "min_pitch_arm", "amplitude_roll_arm", "amplitude_pitch_arm", "kurtosis_roll_dumbbell", "kurtosis_picth_dumbbell", "kurtosis_yaw_dumbbell", "skewness_roll_dumbbell",
+"skewness_pitch_dumbbell", "skewness_yaw_dumbbell", "max_yaw_dumbbell", "min_yaw_dumbbell", "amplitude_yaw_dumbbell", "kurtosis_roll_forearm", "kurtosis_picth_forearm", "kurtosis_yaw_forearm", "skewness_roll_forearm", "skewness_pitch_forearm", "skewness_yaw_forearm", "max_roll_forearm",
+"max_yaw_forearm", "min_roll_forearm", "min_yaw_forearm", "amplitude_roll_forearm", "amplitude_yaw_forearm", "avg_roll_forearm", "stddev_roll_forearm", "var_roll_forearm", "avg_pitch_forearm", "stddev_pitch_forearm", "var_pitch_forearm", "avg_yaw_forearm", "stddev_yaw_forearm", "var_yaw_forearm")
+mytraining <- mytraining[!myNearZerovariables]
+dim(mytraining)
+
+```
+There were 107 variables with more than 95% of the data missing. Those variables were removed from the data as well. If we built a classification model based on those variables, then we can expect most of the time the variable is missing and therefore we cannot apply the classification rules on them. Therefore, building a model based on variables that's mostly missing is not practical. Teh following code chunk remove the first column so it does not throw off the algorithm and also remove variables with more than 80% NA's.
+
+```{r}
+mytraining <- mytraining[c(-1)]
+
+mytraining2 <- mytraining
+for(i in 1:length(mytraining)) 
+  {
+        if( sum(is.na(mytraining[, i])) / nrow(mytraining) >= .8) 
+        for(j in 1:length(mytraining2)) {
+            if(length(grep(names(mytraining[i]), names(mytraining2)[j])) == 1)
+              { 
+                mytraining2 <- mytraining2[ , -j]
+            }   
+        } 
+    }
+
+
+dim(mytraining2)
+
+mytraining <- mytraining2
+rm(mytraining2)
+
+```
+
+Ensure that the test set has the same columns and data clean up.  Also check the number of dimensions for both sets of data to ensure this has been completed properly.    
+
+```{r}
+clean1 <- colnames(mytraining)
+clean2 <- colnames(mytraining[, -58])
+mytesting <- mytesting[clean1]
+test <- test[clean2]
+dim(mytesting)
+dim(test)
+```
+
+
+Make sure that the test data is all of the same type so there are no errors.  
+
+```{r}
+
+
+for(i in 1:length(test))
+  {
+        for(j in 1:length(mytraining))
+          {
+        if(length(grep(names(mytraining[i]), names(test)[j])) == 1)
+          {
+            class(test[j]) <- class(mytraining[i])
+        }      
+    }      
+}
+
+test <- rbind(mytraining[2, -58] , test) 
+test <- test[-1,]
+
+```
+
+###  Utilize a Decision Tree
+
+First try using the decision tree method.  See the plot and summary for this method.  
+
+```{r}
+modfit1 <- rpart(classe ~ ., data=mytraining, method="class")
+fancyRpartPlot(modfit1)
+prediction1 <- predict(modfit1, mytesting, type = "class")
+confusionMatrix(prediction1, mytesting$classe)
+
+```
+
+### Utilize Random Forest
+
+Employ random forest to cross validate.  See the summary of the results.  
+
+```{r}
+
+modfit2 <- randomForest(classe ~. , data=mytraining)
+prediction2 <- predict(modfit2, mytesting, type = "class")
+confusionMatrix(prediction2, mytesting$classe)
+
+```
+
+
+# Creat Output Files
+
+As the random forest method produced a more accurate result, we will utilize this method for the final prediction and also the quiz.  
+
+This will create the final prediction and output the files for the results for each test.  
+
+```{r}
+
+predictionfinal <- predict(modfit2, test, type = "class")
+
+write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("case_", i, ".txt")
+    write.table(x[i], file=filename, quote=FALSE, row.names=FALSE, col.names=FALSE)
+  }
+}
+
+write_files(predictionfinal)
+
+```
